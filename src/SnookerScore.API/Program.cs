@@ -193,6 +193,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("Default");
 
+// Serve frontend static files if they exist in wwwroot
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -209,5 +213,25 @@ app.MapGet("/sync/status", (SnookerScore.API.Services.CloudSyncService sync) => 
     pendingEvents = sync.PendingCount,
     timestamp = DateTime.UtcNow
 }));
+
+// Server info for the launcher/dashboard
+app.MapGet("/server/info", () =>
+{
+    var addresses = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+        .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+        .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+        .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                    && !System.Net.IPAddress.IsLoopback(a.Address))
+        .Select(a => a.Address.ToString())
+        .ToList();
+
+    return Results.Ok(new
+    {
+        urls = addresses.Select(ip => $"http://{ip}:5078").ToList(),
+        scorerUrl = addresses.Select(ip => $"http://{ip}:5078/scorer").FirstOrDefault(),
+        displayUrl = addresses.Select(ip => $"http://{ip}:5078/display").FirstOrDefault(),
+        localIps = addresses
+    });
+});
 
 app.Run();
