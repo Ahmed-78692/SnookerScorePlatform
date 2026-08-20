@@ -103,6 +103,10 @@ builder.Services.AddScoped<IMatchService, MatchService>();
 // SignalR broadcaster
 builder.Services.AddScoped<IMatchBroadcaster, SignalRMatchBroadcaster>();
 
+// Cloud sync service (for local venue mode)
+builder.Services.AddSingleton<SnookerScore.API.Services.CloudSyncService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SnookerScore.API.Services.CloudSyncService>());
+
 // SignalR
 builder.Services.AddSignalR();
 
@@ -197,5 +201,13 @@ app.MapHub<MatchHub>("/hubs/match");
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
+// Sync status (for local venue mode)
+app.MapGet("/sync/status", (SnookerScore.API.Services.CloudSyncService sync) => Results.Ok(new
+{
+    cloudOnline = sync.IsOnline,
+    pendingEvents = sync.PendingCount,
+    timestamp = DateTime.UtcNow
+}));
 
 app.Run();
