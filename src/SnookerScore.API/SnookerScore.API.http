@@ -1,0 +1,6 @@
+@SnookerScore.API_HostAddress = http://localhost:5078
+
+GET {{SnookerScore.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
