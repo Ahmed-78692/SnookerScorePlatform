@@ -9,7 +9,19 @@ using SnookerScore.Infrastructure.Configuration;
 using SnookerScore.Infrastructure.Persistence;
 using SnookerScore.Infrastructure.Repositories;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory
+});
+
+// Disable file config reloading (fixes inotify limit on Render/Docker)
+builder.Configuration.Sources.Clear();
+builder.Configuration
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables();
 
 // MongoDB
 builder.Services.Configure<MongoDbSettings>(
