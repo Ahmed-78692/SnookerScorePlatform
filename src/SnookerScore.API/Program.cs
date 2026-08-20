@@ -23,10 +23,41 @@ if (!useInMemory)
     {
         var mongoSettings = builder.Configuration.GetSection("MongoDB").Get<MongoDbSettings>()
             ?? new MongoDbSettings();
-        var testClient = new MongoDB.Driver.MongoClient(mongoSettings.ConnectionString);
-        // Quick connectivity test — timeout after 3 seconds
-        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(3));
+
+        // Also check direct environment variable as fallback
+        var envConnStr = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING")
+            ?? Environment.GetEnvironmentVariable("MongoDB__ConnectionString");
+        if (!string.IsNullOrEmpty(envConnStr))
+        {
+            mongoSettings.ConnectionString = envConnStr;
+        }
+
+        var envDbName = Environment.GetEnvironmentVariable("MONGODB_DATABASE_NAME")
+            ?? Environment.GetEnvironmentVariable("MongoDB__DatabaseName");
+        if (!string.IsNullOrEmpty(envDbName))
+        {
+            mongoSettings.DatabaseName = envDbName;
+        }
+
+        // Re-configure with the resolved settings
+        builder.Services.Configure<MongoDbSettings>(opts =>
+        {
+            opts.ConnectionString = mongoSettings.ConnectionString;
+            opts.DatabaseName = mongoSettings.DatabaseName;
+        });
+
+        Console.WriteLine($"Connecting to MongoDB: {mongoSettings.ConnectionString[..Math.Min(40, mongoSettings.ConnectionString.Length)]}...");
+
+        var clientSettings = MongoDB.Driver.MongoClientSettings.FromConnectionString(mongoSettings.ConnectionString);
+        clientSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(10);
+        clientSettings.ConnectTimeout = TimeSpan.FromSeconds(10);
+        var testClient = new MongoDB.Driver.MongoClient(clientSettings);
+
+        // Quick connectivity test
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
         testClient.ListDatabaseNames(cts.Token).MoveNext(cts.Token);
+
+        Console.WriteLine("✅ MongoDB connected successfully");
         builder.Services.AddSingleton<MongoDbContext>();
         builder.Services.AddScoped<IMatchRepository, MatchRepository>();
         builder.Services.AddScoped<IMatchEventRepository, MatchEventRepository>();
@@ -34,9 +65,9 @@ if (!useInMemory)
         builder.Services.AddScoped<ITournamentRepository, TournamentRepository>();
         builder.Services.AddScoped<IUserRepository, UserRepository>();
     }
-    catch
+    catch (Exception ex)
     {
-        // MongoDB not available — fall back to in-memory for development
+        Console.WriteLine($"⚠️  MongoDB connection failed: {ex.Message}");
         useInMemory = true;
     }
 }
