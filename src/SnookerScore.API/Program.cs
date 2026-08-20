@@ -140,15 +140,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// CORS - SignalR requires credentials which means we can't use AllowAnyOrigin
+// CORS - allow configured origins + any from environment
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Default", policy =>
     {
-        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? new[] { "http://localhost:3000", "http://localhost:5173", "http://localhost:5078" };
+        var origins = new List<string> { "http://localhost:3000", "http://localhost:5173", "http://localhost:5078" };
 
-        policy.WithOrigins(origins)
+        // Add from configuration
+        var configOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (configOrigins != null) origins.AddRange(configOrigins);
+
+        // Add from direct environment variables
+        for (int i = 0; i < 5; i++)
+        {
+            var envOrigin = Environment.GetEnvironmentVariable($"Cors__AllowedOrigins__{i}")
+                ?? Environment.GetEnvironmentVariable($"CORS_ORIGIN_{i}");
+            if (!string.IsNullOrEmpty(envOrigin)) origins.Add(envOrigin);
+        }
+        var singleOrigin = Environment.GetEnvironmentVariable("CORS_ORIGIN");
+        if (!string.IsNullOrEmpty(singleOrigin)) origins.Add(singleOrigin);
+
+        var distinctOrigins = origins.Distinct().Where(o => !string.IsNullOrEmpty(o)).ToArray();
+        Console.WriteLine($"CORS allowed origins: {string.Join(", ", distinctOrigins)}");
+
+        policy.WithOrigins(distinctOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
